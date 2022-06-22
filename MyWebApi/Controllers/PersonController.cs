@@ -1,7 +1,9 @@
 using System.Collections;
+using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MyWebApi.DbContexts;
+using MyWebApi.Dtos;
 using MyWebApi.Entities;
 using MyWebApi.Helpers;
 
@@ -11,100 +13,80 @@ namespace MyWebApi.Controllers
     [Route("[controller]")]
     public class PersonController : ControllerBase
     {
-
         private readonly EmployeeDbContext _employeeDbContext;
+        private readonly IMapper _mapper;
 
-        //private static List<Person> _persons;
-
-        public PersonController(EmployeeDbContext employeeDbContext)
+        public PersonController(EmployeeDbContext employeeDbContext, IMapper _mapper)
         {
             _employeeDbContext = employeeDbContext;
+            this._mapper = _mapper;
         }
 
-        [HttpGet]
-        public async Task<IEnumerable<Employee>> GetAllEmployeesAsync()
+        [HttpPost("SaveEmployee")]
+        public ActionResult SaveEmployee(EmployeeDto employeeDto)
         {
-            var employees = await _employeeDbContext.Employees.ToListAsync();
-            return employees;
-        }
-
-        [HttpPost]
-        public void SaveEmployees(List<Employee> employees)
-        {
-            _employeeDbContext.AddRange(employees);
-            _employeeDbContext.SaveChangesAsync();
-        }
-
-        [HttpGet("")]
-        public async Task<IEnumerable<AverageSalaryForEachDepartmentDto>> GetAverageSalaryForEachDepartment()
-        {
-            var items = from d in _employeeDbContext.Departments
-                join e in _employeeDbContext.Employees on d.Id equals e.DepartmentId into employeeTmp
-                from empl in employeeTmp.DefaultIfEmpty()
-                group empl by d.Name into g
-                    select
-                        new AverageSalaryForEachDepartmentDto(
-                        g.Key,
-                        g.Average(r => r.Salary));
+            Department? department = _employeeDbContext.Find<Department>(employeeDto.DepartmentId);
             
-            return await items.ToListAsync();
+            if (department == null)
+            {
+                return NotFound(new Result(isValid: true));
+            }
+            try
+            {
+                Employee employee = _mapper.Map<Employee>(employeeDto);
+                _employeeDbContext.Employees.Add(employee);
+                _employeeDbContext.SaveChanges();
+                return Ok(new Result(isValid: true));
+            }
+            catch
+            {
+                return BadRequest(new Result(isValid: true));
+            }
         }
 
+        [HttpPost("SavePerson")]
+        public ActionResult SavePerson(Person person)
+        {
+            try
+            {
+                _employeeDbContext.Persons.Add(person);
+                _employeeDbContext.SaveChanges();
+                return Ok(new Result(isValid: true));
+            }
+            catch
+            {
+                return BadRequest(new Result(isValid: true));
+            }
+        }
 
+        [HttpGet("GetPersons")]
+        public IEnumerable<Person> GetPersons()
+        {
+            return _employeeDbContext.Persons;
+        }
 
+        [HttpPost("LoginPerson")]
+        public ActionResult TryToLogPerson(PersonLoginDto person)
+        {
+            var personFound = _employeeDbContext.Persons.FirstOrDefault(x => x.Name.Equals(person.Name) && x.Password.Equals(person.Password));
 
-        //[HttpGet]
-        //public List<Department> GetAllDepartments()
-        //{
-        //    var result = _employeeDbContext.Departments.ToList();
-        //    return result;
-        //}
+            if (personFound == null)
+            {
+                return NotFound("Bad login or password");
+            }
+            else return Ok("Successful logged");
+        }
+        
+        [HttpPost("LoginEmployee")]
+        public ActionResult TryToLogEmployee(PersonLoginDto employee)
+        {
+            var personFound = _employeeDbContext.Employees.FirstOrDefault(x => x.Name.Equals(employee.Name) && x.Password.Equals(employee.Password));
 
-        //[HttpPost]
-        //public ActionResult SaveDepartments(List<Department> departments)
-        //{
-        //    try
-        //    {
-        //        _employeeDbContext.Departments.AddRange(departments);
-        //        _employeeDbContext.SaveChanges();
-        //        return Ok();
-        //    }
-        //    catch
-        //    {
-        //        return BadRequest();
-        //    }
-        //}
-
-
-        //[HttpGet(Name = "GetPersons")]
-        //public IEnumerable<Person> GetPersons()
-        //{
-        //    return _persons;
-        //}
-
-        ////[HttpGet(Name = "GetPerson/${index}")]
-        ////public Person GetPerson(int index)
-        ////{
-        ////    return _persons[index];
-        ////}
-
-        //[HttpPost(Name = "AddPerson")]
-        //public ActionResult AddPerson(Person person)
-        //{
-        //    if (_persons == null)
-        //    {
-        //        _persons = new List<Person>();
-        //    }
-        //    Console.WriteLine("Odebrano: " + person.Name + ", " + person.Password);
-        //    try
-        //    {
-        //        _persons.Add(person);
-        //        return Ok(new Result(true));
-        //    }
-        //    catch
-        //    {
-        //        return BadRequest(new Result(true));
-        //    }
-        //}
+            if (personFound == null)
+            {
+                return NotFound("Bad login or password");
+            }
+            else return Ok("Successful logged");
+        }
     }
 }
